@@ -1,4 +1,3 @@
-// https://developer.android.com/build#settings-file
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -8,14 +7,13 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
-        mavenLocal()
         maven("https://jitpack.io")
     }
 }
 
-rootProject.name = "CloudStream"
-include(":app", ":library", ":docs")
+rootProject.name = "Watch Anime Global"
+include(":app")

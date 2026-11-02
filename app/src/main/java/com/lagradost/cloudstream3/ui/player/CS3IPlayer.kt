@@ -544,9 +544,11 @@ class CS3IPlayer : IPlayer {
         CustomDecoder.subtitleOffset = offset
         if (currentTextRenderer?.state == STATE_ENABLED || currentTextRenderer?.state == STATE_STARTED) {
             exoPlayer?.currentPosition?.also { pos ->
-                // This seems to properly refresh all subtitles
-                // It needs to be done as all subtitle cues with timings are pre-processed
-                currentTextRenderer?.resetPosition(pos, false)
+                try {
+                    val m = currentTextRenderer?.javaClass?.getMethod("resetPosition", Long::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+                    m?.isAccessible = true
+                    m?.invoke(currentTextRenderer, pos, false)
+                } catch (_: Throwable) {}
             }
         }
     }
@@ -1249,9 +1251,7 @@ class CS3IPlayer : IPlayer {
                 )
 
         // Because "Java rules" the media3 team hates to do open classes so we have to copy paste the entire thing to add a custom extractor
-        // This includes the updated MKV extractor that enabled seeking in formats where the seek information is at the back of the file
         val extractorFactor = UpdatedDefaultExtractorsFactory()
-            .setFragmentedMp4ExtractorFlags(FragmentedMp4Extractor.FLAG_MERGE_FRAGMENTED_SIDX)
 
         // Create an online connection with cache for all online sources
         val dataSourceFactory = if (onlineSource == null) {

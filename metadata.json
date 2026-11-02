@@ -1,0 +1,6 @@
+{
+  "name": "Watch Anime Global",
+  "description": "Watch Anime Global streaming application",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -28,7 +28,7 @@ import androidx.media3.extractor.flac.FlacExtractor
 import androidx.media3.extractor.flv.FlvExtractor
 import androidx.media3.extractor.heif.HeifExtractor
 import androidx.media3.extractor.jpeg.JpegExtractor
-import androidx.media3.extractor.mkv.UpdatedMatroskaExtractor
+import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.mp3.Mp3Extractor
 import androidx.media3.extractor.mp4.FragmentedMp4Extractor
 import androidx.media3.extractor.mp4.Mp4Extractor
@@ -91,7 +91,7 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
     private var adtsFlags: @AdtsExtractor.Flags Int = 0
     private var amrFlags: @AmrExtractor.Flags Int = 0
     private var flacFlags: @FlacExtractor.Flags Int = 0
-    private var matroskaFlags: @UpdatedMatroskaExtractor.Flags Int = 0
+    private var matroskaFlags: Int = 0
     private var mp4Flags: @Mp4Extractor.Flags Int = 0
     private var fragmentedMp4Flags: @FragmentedMp4Extractor.Flags Int = 0
     private var mp3Flags: @Mp3Extractor.Flags Int = 0
@@ -103,16 +103,16 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
     private var tsTimestampSearchBytes: Int
     private var textTrackTranscodingEnabled: Boolean
     private var subtitleParserFactory: SubtitleParser.Factory
-    private var codecsToParseWithinGopSampleDependencies: @C.VideoCodecFlags Int
-    private var jpegFlags: @JpegExtractor.Flags Int = 0
-    private var heifFlags: @HeifExtractor.Flags Int = 0
+    private var codecsToParseWithinGopSampleDependencies: Int = 0
+    private var jpegFlags: Int = 0
+    private var heifFlags: Int = 0
 
     init {
         tsMode = TsExtractor.MODE_SINGLE_PMT
         tsTimestampSearchBytes = TsExtractor.DEFAULT_TIMESTAMP_SEARCH_BYTES
         subtitleParserFactory = DefaultSubtitleParserFactory()
         textTrackTranscodingEnabled = true
-        codecsToParseWithinGopSampleDependencies = C.VIDEO_CODEC_FLAG_H264 or C.VIDEO_CODEC_FLAG_H265
+        codecsToParseWithinGopSampleDependencies = 0
     }
 
     /**
@@ -215,7 +215,7 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
      */
     @Synchronized
     fun setMatroskaExtractorFlags(
-        flags: @UpdatedMatroskaExtractor.Flags Int
+        flags: Int
     ): UpdatedDefaultExtractorsFactory {
         this.matroskaFlags = flags
         return this
@@ -350,8 +350,8 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
     }
 
     @Synchronized
-    override fun experimentalSetCodecsToParseWithinGopSampleDependencies(
-        codecsToParseWithinGopSampleDependencies: @C.VideoCodecFlags Int
+    fun experimentalSetCodecsToParseWithinGopSampleDependencies(
+        codecsToParseWithinGopSampleDependencies: Int
     ): UpdatedDefaultExtractorsFactory {
         this.codecsToParseWithinGopSampleDependencies = codecsToParseWithinGopSampleDependencies
         return this
@@ -366,7 +366,7 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
      */
     @Synchronized
     fun setJpegExtractorFlags(
-        flags: @JpegExtractor.Flags Int
+        flags: Int
     ): UpdatedDefaultExtractorsFactory {
         this.jpegFlags = flags
         return this
@@ -381,7 +381,7 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
      */
     @Synchronized
     fun setHeifExtractorFlags(
-        flags: @HeifExtractor.Flags Int
+        flags: Int
     ): UpdatedDefaultExtractorsFactory {
         this.heifFlags = flags
         return this
@@ -466,13 +466,13 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
 
             FileTypes.FLV -> extractors.add(FlvExtractor())
             FileTypes.MATROSKA -> extractors.add(
-                UpdatedMatroskaExtractor(
+                MatroskaExtractor(
                     subtitleParserFactory,
                     matroskaFlags
                             or (if (textTrackTranscodingEnabled)
                         0
                     else
-                        UpdatedMatroskaExtractor.FLAG_EMIT_RAW_SUBTITLE_DATA)
+                        MatroskaExtractor.FLAG_EMIT_RAW_SUBTITLE_DATA)
                 )
             )
 
@@ -495,10 +495,6 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
                     FragmentedMp4Extractor(
                         subtitleParserFactory,
                         fragmentedMp4Flags or
-                            FragmentedMp4Extractor
-                                .codecsToParseWithinGopSampleDependenciesAsFlags(
-                                    codecsToParseWithinGopSampleDependencies
-                                ) or
                         if (textTrackTranscodingEnabled) 0
                         else FragmentedMp4Extractor.FLAG_EMIT_RAW_SUBTITLE_DATA
                     )
@@ -508,10 +504,6 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
                     Mp4Extractor(
                         subtitleParserFactory,
                         mp4Flags or
-                            Mp4Extractor
-                                .codecsToParseWithinGopSampleDependenciesAsFlags(
-                                    codecsToParseWithinGopSampleDependencies
-                                ) or
                         if (textTrackTranscodingEnabled) 0
                         else Mp4Extractor.FLAG_EMIT_RAW_SUBTITLE_DATA
                     )
@@ -555,7 +547,7 @@ class UpdatedDefaultExtractorsFactory : ExtractorsFactory {
             FileTypes.PNG -> extractors.add(PngExtractor())
             FileTypes.WEBP -> extractors.add(WebpExtractor())
             FileTypes.BMP -> extractors.add(BmpExtractor())
-            FileTypes.HEIF -> extractors.add(HeifExtractor(heifFlags))
+            FileTypes.HEIF -> extractors.add(HeifExtractor())
             FileTypes.AVIF -> extractors.add(AvifExtractor())
             FileTypes.WEBVTT, FileTypes.UNKNOWN -> {}
             else -> {}

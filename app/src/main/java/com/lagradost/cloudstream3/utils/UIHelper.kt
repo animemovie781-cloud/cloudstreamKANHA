@@ -371,8 +371,7 @@ object UIHelper {
 
     fun Activity.enableEdgeToEdgeCompat() {
         // edge-to-edge is very buggy on earlier versions
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-        WindowCompat.enableEdgeToEdge(window)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
     }
 
     fun Activity.setNavigationBarColorCompat(@AttrRes resourceId: Int) {

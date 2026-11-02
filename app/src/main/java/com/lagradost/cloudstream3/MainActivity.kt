@@ -1718,7 +1718,10 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 val rippleColor = ColorStateList.valueOf(getResourceColor(R.attr.textColor, 1.0f))
                 val rippleColorTransparent =
                     ColorStateList.valueOf(getResourceColor(R.attr.textColor, 0.2f))
-                itemSpacing = 12.toPx // expandedItemSpacing does not have an attr
+                try {
+                    val m = this.javaClass.getMethod("setItemSpacing", Int::class.javaPrimitiveType)
+                    m.invoke(this, 12.toPx)
+                } catch (_: Throwable) {}
                 itemRippleColor = rippleColorTransparent
                 itemActiveIndicatorColor = rippleColor
             }

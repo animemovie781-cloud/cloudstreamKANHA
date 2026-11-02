@@ -872,10 +872,8 @@ object AppContextUtils {
     }
 
     fun Context.isAppInstalled(uri: String): Boolean {
-        val pm = Wrappers.packageManager(this)
-
         return try {
-            pm.getPackageInfo(uri, 0) // PackageManager.GET_ACTIVITIES
+            packageManager.getPackageInfo(uri, 0) // PackageManager.GET_ACTIVITIES
             true
         } catch (e: PackageManager.NameNotFoundException) {
             false

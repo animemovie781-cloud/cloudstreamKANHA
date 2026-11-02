@@ -1,61 +1,27 @@
-import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
-import org.jetbrains.dokka.gradle.engine.parameters.KotlinPlatform
-import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.dokka)
     alias(libs.plugins.kotlin.serialization)
 }
 
 val javaTarget = JvmTarget.fromTarget(libs.versions.jvmTarget.get())
 
 abstract class GenerateGitHashTask : DefaultTask() {
-
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val headFile: RegularFileProperty
-
-    @get:InputDirectory
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val headsDir: DirectoryProperty
-
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
     @TaskAction
     fun generate() {
-        val head = headFile.get().asFile
-
-        val hash = try {
-            if (head.exists()) {
-                // Read the commit hash from .git/HEAD
-                val headContent = head.readText().trim()
-                if (headContent.startsWith("ref:")) {
-                    val refPath = headContent.substring(5) // e.g., refs/heads/main
-                    val commitFile = File(head.parentFile, refPath)
-                    if (commitFile.exists()) commitFile.readText().trim() else ""
-                } else headContent // If it's a detached HEAD (commit hash directly)
-            } else "" // If .git/HEAD doesn't exist
-        } catch (_: Throwable) {
-            "" // Just set to an empty string if any exception occurs
-        }.take(7) // Get the short commit hash
-
         val outFile = outputDir.file("git-hash.txt").get().asFile
         outFile.parentFile.mkdirs()
-        outFile.writeText(hash)
+        outFile.writeText("c10ud57")
     }
 }
 
 val generateGitHash = tasks.register<GenerateGitHashTask>("generateGitHash") {
-    val gitDir = layout.projectDirectory.dir("../.git")
-
-    headFile.set(gitDir.file("HEAD"))
-    headsDir.set(gitDir.dir("refs/heads"))
-
     outputDir.set(layout.buildDirectory.dir("generated/git"))
 }
 
@@ -65,11 +31,8 @@ android {
         unitTests.isReturnDefaultValues = true
     }
 
-    // Looks like google likes to add metadata only they can read https://gitlab.com/IzzyOnDroid/repo/-/work_items/491
     dependenciesInfo {
-        // Disables dependency metadata when building APKs.
         includeInApk = false
-        // Disables dependency metadata when building Android App Bundles.
         includeInBundle = false
     }
 
@@ -83,18 +46,11 @@ android {
     }
 
     signingConfigs {
-        // We just use SIGNING_KEY_ALIAS here since it won't change
-        // so won't kill the configuration cache.
-        if (System.getenv("SIGNING_KEY_ALIAS") != null) {
-            create("prerelease") {
-                val tmpFilePath = System.getProperty("user.home") + "/work/_temp/keystore/"
-                val prereleaseStoreFile: File? = File(tmpFilePath).listFiles()?.first()
-
-                storeFile = prereleaseStoreFile?.let { file(it) }
-                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
-            }
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
@@ -109,9 +65,6 @@ android {
 
         manifestPlaceholders["target_sdk_version"] = libs.versions.targetSdk.get()
 
-        // Reads local.properties
-        val localProperties = gradleLocalProperties(rootDir, project.providers)
-
         buildConfigField(
             "long",
             "BUILD_DATE",
@@ -120,27 +73,40 @@ android {
         buildConfigField(
             "String",
             "SIMKL_CLIENT_ID",
-            "\"" + (System.getenv("SIMKL_CLIENT_ID") ?: localProperties["simkl.id"]) + "\""
+            "\"" + (System.getenv("SIMKL_CLIENT_ID") ?: "") + "\""
         )
         buildConfigField(
             "String",
             "SIMKL_CLIENT_SECRET",
-            "\"" + (System.getenv("SIMKL_CLIENT_SECRET") ?: localProperties["simkl.secret"]) + "\""
+            "\"" + (System.getenv("SIMKL_CLIENT_SECRET") ?: "") + "\""
         )
         buildConfigField(
             "String",
             "MAL_KEY",
-            "\"" + (System.getenv("MAL_KEY") ?: localProperties["mal.key"]) + "\""
+            "\"" + (System.getenv("MAL_KEY") ?: "") + "\""
         )
         buildConfigField(
             "String",
             "ANILIST_KEY",
-            "\"" + (System.getenv("ANILIST_KEY") ?: localProperties["anilist.key"]) + "\""
+            "\"" + (System.getenv("ANILIST_KEY") ?: "") + "\""
+        )
+        buildConfigField(
+            "String",
+            "FLAVOR",
+            "\"debug\""
         )
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            isDebuggable = true
+            signingConfig = signingConfigs.getByName("debugConfig")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
         release {
             isDebuggable = false
             isMinifyEnabled = false
@@ -149,32 +115,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-        }
-        debug {
-            isDebuggable = true
-            applicationIdSuffix = ".debug"
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-    }
-
-    flavorDimensions.add("state")
-    productFlavors {
-        create("stable") {
-            dimension = "state"
-        }
-        create("prerelease") {
-            dimension = "state"
-            applicationIdSuffix = ".prerelease"
-            if (signingConfigs.names.contains("prerelease")) {
-                signingConfig = signingConfigs.getByName("prerelease")
-            } else {
-                logger.warn("No prerelease signing config!")
-            }
-            versionNameSuffix = "-PRE"
-            versionCode = (System.currentTimeMillis() / 60000).toInt()
         }
     }
 
@@ -185,8 +125,6 @@ android {
     }
 
     java {
-        // Use Java 17 toolchain even if a higher JDK runs the build.
-        // We still use Java 8 for now which higher JDKs have deprecated.
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(libs.versions.jdkToolchain.get()))
         }
@@ -203,8 +141,6 @@ android {
 
     packaging {
         jniLibs {
-            // Enables legacy JNI packaging to reduce APK size (similar to builds before minSdk 23).
-            // Note: This may increase app startup time slightly.
             useLegacyPackaging = true
         }
     }
@@ -232,7 +168,7 @@ dependencies {
     implementation(libs.bundles.lifecycle)
     implementation(libs.bundles.navigation)
     implementation(libs.kotlinx.collections.immutable)
-    implementation(libs.kotlinx.serialization.json) // JSON Parser
+    implementation(libs.kotlinx.serialization.json)
 
     // Design & UI
     implementation(libs.preference.ktx)
@@ -253,32 +189,31 @@ dependencies {
     implementation(libs.anime.db)
 
     // PlayBack
-    implementation(libs.colorpicker) // Subtitle Color Picker
-    implementation(libs.newpipeextractor) // For Trailers
-    implementation(libs.juniversalchardet) // Subtitle Decoding
+    implementation(libs.colorpicker)
+    implementation(libs.newpipeextractor)
+    implementation(libs.juniversalchardet)
 
     // UI Stuff
-    implementation(libs.shimmer) // Shimmering Effect (Loading Skeleton)
-    implementation(libs.palette.ktx) // Palette for Images -> Colors
+    implementation(libs.shimmer)
+    implementation(libs.palette.ktx)
     implementation(libs.tvprovider)
-    implementation(libs.overlappingpanels) // Gestures
-    implementation(libs.biometric) // Fingerprint Authentication
-    implementation(libs.previewseekbar.media3) // SeekBar Preview
-    implementation(libs.qrcode.kotlin) // QR Code for PIN Auth on TV
+    implementation(libs.overlappingpanels)
+    implementation(libs.biometric)
+    implementation(libs.previewseekbar.media3)
+    implementation(libs.qrcode.kotlin)
 
     // Extensions & Other Libs
-    implementation(libs.jsoup) // HTML Parser
-    implementation(libs.ksoup) // HTML Parser
-    implementation(libs.rhino) // Run JavaScript
-    implementation(libs.safefile) // To Prevent the URI File Fu*kery
-    coreLibraryDesugaring(libs.desugar.jdk.libs.nio) // NIO Flavor Needed for NewPipeExtractor
-    implementation(libs.conscrypt.android) // To Fix SSL Fu*kery on Android 9
-    implementation(libs.jackson.module.kotlin) // JSON Parser
+    implementation(libs.jsoup)
+    implementation(libs.ksoup)
+    implementation(libs.rhino)
+    implementation(libs.safefile)
+    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
+    implementation(libs.conscrypt.android)
+    implementation(libs.jackson.module.kotlin)
     implementation(libs.zipline)
 
-    // Temp/deprecated; will be removed once extensions have time to migrate from using it
+    // Temp/deprecated
     implementation("com.google.code.gson:gson:2.11.0")
-    // Deprecated; will be removed once extensions have time to migrate from using it
     implementation("me.xdrop:fuzzywuzzy:1.4.0")
 
     // Torrent Support
@@ -286,69 +221,46 @@ dependencies {
 
     // Downloading & Networking
     implementation(libs.work.runtime.ktx)
-    implementation(libs.nicehttp) // HTTP Lib
+    implementation(libs.nicehttp)
 
-    implementation(project(":library"))
+    implementation("com.github.recloudstream.cloudstream:library:-SNAPSHOT")
+
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
+    implementation("com.google.android.gms:play-services-cronet:18.1.0")
+    implementation("androidx.media3:media3-datasource-cronet:1.5.1")
+    implementation("androidx.media3:media3-container:1.5.1")
+    implementation("androidx.media3:media3-extractor:1.5.1")
 }
 
-tasks.register<Jar>("androidSourcesJar") {
-    archiveClassifier.set("sources")
-    from(android.sourceSets.getByName("main").java.directories) // Full Sources
-}
-
-tasks.register<Copy>("copyJar") {
-    dependsOn("build", ":library:jvmJar")
-    from(
-        "build/intermediates/compile_app_classes_jar/prereleaseDebug/bundlePrereleaseDebugClassesToCompileJar",
-        "../library/build/libs"
-    )
-    into("build/app-classes")
-    include("classes.jar", "library-jvm*.jar")
-    // Remove the version
-    rename("library-jvm.*.jar", "library-jvm.jar")
-}
-
-// Merge the app classes and the library classes into classes.jar
-tasks.register<Jar>("makeJar") {
-    // Duplicates cause hard to catch errors, better to fail at compile time.
-    duplicatesStrategy = DuplicatesStrategy.FAIL
-    dependsOn(tasks.getByName("copyJar"))
-    from(
-        zipTree("build/app-classes/classes.jar"),
-        zipTree("build/app-classes/library-jvm.jar")
-    )
-    destinationDirectory.set(layout.buildDirectory)
-    archiveBaseName = "classes"
+configurations.all {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-stdlib:2.2.10")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.2.10")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.2.10")
+        force("org.jetbrains.kotlin:kotlin-stdlib-common:2.2.10")
+        force("org.jetbrains.kotlin:kotlin-reflect:2.2.10")
+    }
 }
 
 tasks.withType<KotlinJvmCompile> {
     compilerOptions {
         jvmTarget.set(javaTarget)
         jvmDefault.set(JvmDefaultMode.ENABLE)
+        freeCompilerArgs.addAll(
+            "-Xskip-metadata-version-check",
+            "-Xskip-prerelease-check",
+        )
         optIn.addAll(
             "com.lagradost.cloudstream3.InternalAPI",
             "com.lagradost.cloudstream3.Prerelease",
+            "kotlin.uuid.ExperimentalUuidApi",
+            "androidx.media3.common.util.UnstableApi",
         )
     }
 }
 
-dokka {
-    moduleName = "App"
-    dokkaSourceSets {
-        configureEach {
-            suppress = name != "prereleaseDebug"
-            analysisPlatform = KotlinPlatform.JVM
-            displayName = "JVM"
-            documentedVisibilities(
-                VisibilityModifier.Public,
-                VisibilityModifier.Protected
-            )
-
-            sourceLink {
-                localDirectory = file("..")
-                remoteUrl("https://github.com/recloudstream/cloudstream/tree/master")
-                remoteLineSuffix = "#L"
-            }
-        }
-    }
+tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+    enabled = false
 }
